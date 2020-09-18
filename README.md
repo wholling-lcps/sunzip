@@ -9,6 +9,7 @@ test files or jKarel maps.
 
 ## Usage
 **Command Line Interface**
+
 ```
 usage: sunzip [-h] [-d DESTINATION] [-e [EXTRA_FILES [EXTRA_FILES ...]]] [-g] [zipfile]
 
@@ -28,6 +29,7 @@ optional arguments:
 ```
 
 **GUI**
+
 On Windows, you can also run the included batch script to launch the GUI.  It
 assumes that it shares a directory with the Python script and that Python was
 added to your %PATH% during installation.
