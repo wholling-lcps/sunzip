@@ -1,0 +1,288 @@
+#!/usr/bin/python3
+
+import argparse
+import contextlib
+import os
+import pathlib
+import shutil
+import sys
+import tempfile
+import zipfile
+
+from typing import List
+
+import tkinter as tk
+from tkinter import filedialog
+from tkinter import messagebox
+
+@contextlib.contextmanager
+def pushd(new_directory: str):
+    """
+    Changes the current working directory and implicitly tracks the directory
+    stack.
+
+    :param new_directory: the directory to switch to
+    """
+    previous_directory = os.getcwd()
+    os.chdir(new_directory)
+    try:
+        yield
+    finally:
+        os.chdir(previous_directory)
+
+
+class GraphicalApplication(tk.Frame):
+    """
+    A class that allows the user to browse for required paths using a simple
+    GUI.
+    """
+    def __init__(self, master=None):
+        tk.Frame.__init__(self, master)
+        self.extra_files = []
+        self.grid()
+        self.create_widgets()
+
+
+    def create_widgets(self):
+        """
+        Initalize the GUI.
+        """
+        # fields for the zip archive that will be extracted
+        self.zipfile_label = tk.Label(self, text='Zipfile')
+        self.zipfile_label.grid(sticky=tk.W)
+        self.zipfile_entry = tk.Entry(self)
+        self.zipfile_entry.grid(row=1)
+        self.zipfile_button = tk.Button(self, text='Browse...',
+                command=self.browse_for_zipfile)
+        self.zipfile_button.grid(row=1, column=1)
+
+        # fields for the destination where the archive contents will be extracted
+        self.destination_label = tk.Label(self, text='Destination Path')
+        self.destination_label.grid(row=2, sticky=tk.W)
+        self.destination_entry = tk.Entry(self)
+        self.destination_entry.grid(row=3)
+        self.destination_button = tk.Button(self, text='Browse...',
+                command=self.browse_for_destination_path)
+        self.destination_button.grid(row=3, column=1)
+
+        # fields for specifying extra files to copy
+        self.extra_files_label = tk.Label(self, text='Extra Files')
+        self.extra_files_label.grid(row=4, sticky=tk.W)
+        self.extra_files_entry = tk.Entry(self)
+        self.extra_files_entry.grid(row=5)
+        self.extra_files_button = tk.Button(self, text='Browse...',
+                command=self.browse_for_extra_files)
+        self.extra_files_button.grid(row=5, column=1)
+
+        # fields for specifying an extra directory to copy
+        self.extra_directory_label = tk.Label(self, text='Extra Folders')
+        self.extra_directory_label.grid(row=6, sticky=tk.W)
+        self.extra_directory_entry = tk.Entry(self)
+        self.extra_directory_entry.grid(row=7)
+        self.extra_directory_button = tk.Button(self, text='Browse...',
+                command=self.browse_for_extra_directory)
+        self.extra_directory_button.grid(row=7, column=1)
+
+        # field for starting the extract from the GUI
+        self.extract_button = tk.Button(self, text='Extract',
+                command=self.start_extract)
+        self.extract_button.grid(row=8)
+
+
+    def browse_for_zipfile(self):
+        """
+        Browse for a zipfile using a built-in dialog and use the result to set
+        the entry widget.
+        """
+        path = filedialog.askopenfilename(parent=self,
+                initialdir=str(pathlib.Path.home()),
+                filetypes=[('zip files', '*.zip')])
+        self.zipfile_entry.select_clear()
+        self.zipfile_entry.insert(0, path)
+
+
+    def browse_for_destination_path(self):
+        """
+        Browse for a directory using a built-in dialog and use the result to set
+        the entry widget.
+        """
+        path = filedialog.askdirectory(initialdir=str(pathlib.Path.home()),
+                                       mustexist=False)
+        self.destination_entry.select_clear()
+        self.destination_entry.insert(0, path)
+
+
+    def browse_for_extra_files(self):
+        """
+        Browse for extra files to copy using a built-in dialog and use the
+        result to set the entry widget.
+        """
+        paths = filedialog.askopenfilenames(parent=self,
+                initialdir=str(pathlib.Path.home()),
+                filetypes=[('all files', '*.*')])
+        self.extra_files_entry.select_clear()
+        self.extra_files_entry.insert(0, paths)
+        self.extra_files.extend(tk.Tk().splitlist(paths))
+
+
+    def browse_for_extra_directory(self):
+        """
+        Browse for an extra directory to copy using a built-in dialog and use
+        the result to set the entry widget.
+        """
+        path = filedialog.askdirectory(parent=self,
+               initialdir=str(pathlib.Path.home()))
+        self.extra_directory_entry.select_clear()
+        self.extra_directory_entry.insert(0, path)
+        self.extra_files.extend(tk.Tk().splitlist(path))
+
+
+    def start_extract(self):
+        """
+        Initiate the extraction using the contents of the entry widgets.
+
+        If the entry widgets are empty, this process will silently fail.
+        """
+        zipfile_path = self.zipfile_entry.get()
+        dest_path = self.destination_entry.get()
+        if dest_path is None or not dest_path:
+            dest_path = os.getcwd()
+
+        if zipfile_path is not None and zipfile_path:
+            create_destination_tree(zipfile_path, dest_path, self.extra_files)
+            messagebox.showinfo('Info', 'Process complete')
+        else:
+            messagebox.showinfo('Info', 'No zipfile provided to extract')
+
+
+def create_destination_tree(zipfile_path: str, destination_path: str,
+                            extra_files: List[str]=None) -> bool:
+    """
+    Extracts the source code and zipfiles from the archive at zipfile_path to
+    the directory destination_path.
+
+    The entire contents of the archive will be extracted in a temprorary
+    directory, and the relevant files copied from there.
+
+    :param zipfile_path: the path to a zip archive created by Schoology for
+                         bulk downloads
+    :param destination_path: the path where the relevant contents of the
+                             archive will be extracted
+    :param extra_files: additional files and directories to be copied to
+                        destination_path (e.g., test files, jKarel maps)
+    :returns: a boolean value indictating the success of the operation
+    """
+    # bail out now if we weren't given a zip archive
+    if zipfile_path is None:
+        print("You must provide a path to a zipfile to use the CLI.")
+        return False
+    elif not zipfile.is_zipfile(zipfile_path):
+        print(zipfile_path + " is not a zipfile.")
+        return False
+
+    if not os.path.isdir(destination_path):
+        os.makedirs(destination_path)
+
+    # using a temporary directory...
+    with tempfile.TemporaryDirectory() as workspace:
+        # extract the contents of the bulk archive into that directory
+        archive = zipfile.ZipFile(zipfile_path, mode='r')
+        archive.extractall(path=workspace)
+
+        # inside of that directory...
+        with pushd(workspace):
+            # get the directories containing each student's revision history
+            student_directories = os.listdir()
+
+            # extract the most recent revision for every student
+            for student_directory in student_directories:
+                extract_last_revision(student_directory, destination_path)
+                # copy an extra files needed for this assignment
+                if extra_files is not None and not extra_files:
+                    copy_extra_files(extra_files, destination_path)
+    return True
+
+
+def copy_extra_files(sources: List[str], destination: str):
+    """
+    Copy the files and directories in the sources list to destination.
+
+    :param sources: a list of paths to files and directories
+    :param destination: the path that each source will be copied to
+    """
+    for source in sources:
+        if os.path.isdir(source):
+            shutil.copytree(source, destination)
+        else:
+            shutil.copy(source, destination)
+
+
+def extract_last_revision(revision_history_root: str, destination_root: str):
+    """
+    Extracts only the must recent revision from the history in the bulk
+    archive and move it to the destination.
+
+    :param revision_history_root: a directory that contains one or more
+                                  revisions of work
+    :param destination_root: the directory that will house the most recent
+                            revision
+    """
+
+    # the directory's name is of the form "Last, First - StudentID"
+    student_name = revision_history_root.split(' ')[0] + ' ' \
+                 + revision_history_root.split(' ')[1]
+    # each student will have their own folder in the destination directory
+    destination_path = os.path.join(destination_root, student_name)
+
+    # get a list of relative paths to each submission
+    revisions = [os.path.join(revision_history_root, revision)
+            for revision in os.listdir(revision_history_root)]
+
+    # inside the directory of the most recent revision...
+    # (note that all of the modification times will be the same after inflating the archive)
+    with pushd(revisions[-1]):
+        # filter for zipfiles
+        archived_sources = filter(lambda archive_file:
+                archive_file.endswith('.zip'), os.listdir())
+
+        # extract each zip file in the revision to the destination folder
+        for archived_source in archived_sources:
+            archive = zipfile.ZipFile(archived_source, mode='r')
+            os.mkdir(destination_path)
+            archive.extractall(path=destination_path)
+
+        # filter for java sources
+        java_sources = filter(lambda source_file:
+                source_file.endswith('.java'), os.listdir())
+
+        # copy each java source in the revision to the destination folder
+        # os.renames() will create any intermediate directories if there were no
+        # zip files to trigger zipfile.extractall(), which does create it
+        for java_source in java_sources:
+            os.renames(java_source, os.path.join(destination_path, java_source))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=
+            'A script for extracting and organizing code submissions in Schoology')
+    parser.add_argument('zipfile', nargs='?',
+            help='the name of the archive that contains the revisions of all student submissions')
+    parser.add_argument('-d', '--destination', default=os.getcwd(),
+            help='where to put the extracted revisions')
+    parser.add_argument('-e', '--extra', nargs='*',
+            help='additional files to be copied (e.g., test files, jKarel maps)')
+    parser.add_argument('-g', '--gui', action='store_true',
+            help='use a graphical interface')
+    args = parser.parse_args()
+
+    # without an archive to extract, there's nothing to do
+    if args.gui == True:
+        gui = GraphicalApplication()
+        gui.master.title('Schoology Unzip Utility')
+        gui.mainloop()
+    else:
+        create_destination_tree(args.zipfile, args.destination, args.extra)
+
+
+if __name__ == '__main__':
+    main()
