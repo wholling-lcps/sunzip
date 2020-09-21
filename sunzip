@@ -96,6 +96,7 @@ class GraphicalApplication(tk.Frame):
         path = filedialog.askopenfilename(parent=self,
                 initialdir=str(pathlib.Path.home()),
                 filetypes=[('zip files', '*.zip')])
+        self.extra_files_entry.select_range(0, tk.END)
         self.zipfile_entry.select_clear()
         self.zipfile_entry.insert(0, path)
 
@@ -107,6 +108,7 @@ class GraphicalApplication(tk.Frame):
         """
         path = filedialog.askdirectory(initialdir=str(pathlib.Path.home()),
                                        mustexist=False)
+        self.extra_files_entry.select_range(0, tk.END)
         self.destination_entry.select_clear()
         self.destination_entry.insert(0, path)
 
@@ -119,6 +121,7 @@ class GraphicalApplication(tk.Frame):
         paths = filedialog.askopenfilenames(parent=self,
                 initialdir=str(pathlib.Path.home()),
                 filetypes=[('all files', '*.*')])
+        self.extra_files_entry.select_range(0, tk.END)
         self.extra_files_entry.select_clear()
         self.extra_files_entry.insert(0, paths)
 
@@ -130,6 +133,7 @@ class GraphicalApplication(tk.Frame):
         """
         path = filedialog.askdirectory(parent=self,
                initialdir=str(pathlib.Path.home()))
+        self.extra_files_entry.select_range(0, tk.END)
         self.extra_directory_entry.select_clear()
         self.extra_directory_entry.insert(0, path)
 
