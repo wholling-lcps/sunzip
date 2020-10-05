@@ -38,4 +38,13 @@ A message box will appear when the extraction is complete.
 
 ## Limitations
 Currently, the script uses a built-in set of dialogs for browsing files and
-folders in the GUI.  These
+folders in the GUI.  These allow you to select any number of files within a
+folder or folder.  The GUI uses one field to select files in this way and
+one field to select a single folder in this way.  The selected items are
+copied to the output directory for each student.
+
+This is in contrast to the CLI, which allows you to specify any number of
+folders, and any number of files from any number of locations.  As a result,
+when using the GUI, you should try to move all of the extra files that you
+wish to copy to a single location before running the script.  There may be
+some directory structures that are not possible to copy in this manner.
